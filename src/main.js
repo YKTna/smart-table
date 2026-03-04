@@ -1,68 +1,63 @@
 import './fonts/ys-display/fonts.css'
 import './style.css'
 
-import {data as sourceData} from "./data/dataset_1.js";
+import {ServerApi} from "./components/server.js";
+import {initData} from "./components/data.js";
 
-import {initData} from "./data.js";
-import {processFormData} from "./lib/utils.js";
+import {initSorting} from "./components/sorting.js";
+import {initPagination} from "./components/pagination.js";
+import {initFiltering} from "./components/filtering.js";
+import {initSearching} from "./components/searching.js";
+import {initEditing} from "./components/editing.js";
 
 import {initTable} from "./components/table.js";
-import {initPagination} from "./components/pagination.js"; // @todo: подключение
 
+const BASE_URL = 'https://webinars.webdev.education-services.ru/sp7-api';
+const schema = [
+    { name: 'date', label: 'Date', sort: true, filter: "text", edit: "date" },
+    { name: 'customer', label: 'Customer', filter: "text", edit: "select", options: "customers" },
+    { name: 'seller', label: 'Seller', filter: "select", options: "sellers", edit: "select" },
+    { name: 'total', label: 'Total', sort: true, filter: "range", edit: "number" },
+];
+const app = document.getElementById('app');
 
-// Исходные данные используемые в render()
-const {data, ...indexes} = initData(sourceData);
+const api = initData( ServerApi(BASE_URL) );
 
-/**
- * Сбор и обработка полей из таблицы
- * @returns {Object}
- */
-function collectState() {
-    const state = processFormData(new FormData(sampleTable.container));
-    const rowsPerPage = parseInt(state.rowsPerPage);
-    const page = parseInt(state.page ?? 1);
-    return {
-        ...state,
-        rowsPerPage,
-        page
-    };
+const sorting = initSorting(redraw);
+const pagination = initPagination(redraw);
+const filtering = initFiltering(redraw);
+const searching = initSearching(redraw);
+const editing = initEditing(redraw, api);
+
+const { container, render } = initTable({
+    schema,
+    plugins: [
+        editing.plugin,
+        searching.plugin,
+        filtering.plugin,
+        sorting.plugin,
+        pagination.plugin,
+    ]
+});
+
+app.replaceChildren( container );
+
+async function redraw() {
+    let query = {};
+    query = sorting.apply(query);
+    query = pagination.apply(query);
+    query = filtering.apply(query);
+    query = searching.apply(query);
+
+    const { items, total } = await api.getRecords(query);
+
+    render(items);
+    pagination.update(total);
 }
 
-/**
- * Перерисовка состояния таблицы при любых изменениях
- * @param {HTMLButtonElement?} action
- */
-function render(action) {
-    let state = collectState(); // состояние полей из таблицы
-    let result = [...data]; // копируем для последующего изменения
-    // @todo: использование
-    result = applyPagination(result, state, action);
+api.getIndexes().then(indexes => {
+    filtering.update(indexes);
+    editing.update(indexes);
 
-    sampleTable.render(result)
-}
-
-const sampleTable = initTable({
-    tableTemplate: 'table',
-    rowTemplate: 'row',
-    before: [],
-    after: ['pagination']
-}, render);
-
-// @todo: инициализация
-const applyPagination = initPagination(
-    sampleTable.pagination.elements,
-    (el, page, isCurrent) => {
-        const input = el.querySelector('input');
-        const label = el.querySelector('span');
-        input.value = page;
-        input.checked = isCurrent;
-        label.textContent = page;
-        return el;
-    }
-);
-
-
-const appRoot = document.querySelector('#app');
-appRoot.appendChild(sampleTable.container);
-
-render();
+    return redraw();
+})

@@ -1,67 +1,74 @@
-import {cloneTemplate} from "../lib/utils.js";
+import {classNames as cx, create, deepClone, setContent} from "../lib/utils.js";
 
-/**
- * Инициализирует таблицу и вызывает коллбэк при любых изменениях и нажатиях на кнопки
- *
- * @param {Object} settings
- * @param {(action: HTMLButtonElement | undefined) => void} onAction
- * @returns {{container: Node, elements: *, render: render}}
- */
-export function initTable(settings, onAction) {
-    const {tableTemplate, rowTemplate, before, after} = settings;
-    const root = cloneTemplate(tableTemplate);
 
-    // @todo: #1.2 —  вывести дополнительные шаблоны до и после таблицы
-    // до
-    if (before && Array.isArray(before)) {
-        before.slice().reverse().forEach(subName => {
-            root[subName] = cloneTemplate(subName);
-            root.container.prepend(root[subName].container);
-        });
-    }
+export function Column({ name, value, role = 'cell' }) {
+    return create('div', {
+        class: 'table-column',
+        role,
+        data: { name }
+    }, value);
+}
 
-    // после
-    if (after && Array.isArray(after)) {
-        after.forEach(subName => {
-            root[subName] = cloneTemplate(subName);
-            root.container.append(root[subName].container);
-        });
-    }
+export function Row({ columns, className = '' }) {
+    return create('div', {
+        class: cx('table-row', className),
+        role: 'row'
+    }, ...columns);
+}
 
-    // @todo: #1.3 —  обработать события и вызвать onAction()
-    root.container.addEventListener('change', () => {
-        onAction();
+export function Cell({ column, data, name, value }) {
+    return column.tag ? create(column.tag, { column, data, name, value }) : value;
+}
+
+function RowGroup({ rows = [] }) {
+    return create('div', {
+        class: 'table-content',
+        data: { name: 'rows' },
+        role: 'rowgroup'
+    }, ...rows);
+}
+
+function Table({ schema, className = '', sections = [] }) {
+    return create('div', {
+        name,
+        class: cx('table', className),
+        style: { '--columns': schema.map(({ size }) => size ?? '1fr').join(' ') },
+        role: 'table'
+    }, ...sections);
+}
+
+export function initTable({ schema, options = {}, plugins = [] }) {
+    const content = RowGroup({});
+    const internalSchema = deepClone(schema);
+    const before = [];
+    const after = [];
+
+    plugins.forEach(plugin => {
+        const insert = plugin(internalSchema);
+        switch(insert.type) {
+            case 'before': before.push(insert.element); break;
+            case 'after': after.push(insert.element); break;
+            default: break;
+        }
     });
 
-    root.container.addEventListener('reset', () => {
-        setTimeout(() => {
-            onAction();
-        }, 0);
-    });
-
-    root.container.addEventListener('submit', (e) => {
-        e.preventDefault();
-        onAction(e.submitter);
+    const table = Table({
+        name: options.name,
+        className: options.className,
+        schema: internalSchema,
+        sections: [...before, content, ...after]
     });
 
     const render = (data) => {
-      // @todo: #1.1 — преобразовать данные в массив строк на основе шаблона rowTemplate
-      const nextRows = data.map(item => {
-            const row = cloneTemplate(rowTemplate);
-            Object.keys(item).forEach(key => {
-                if (key in row.elements) {
-                    const element = row.elements[key];
-                    if (element.tagName === 'INPUT' || element.tagName === 'SELECT') {
-                        element.value = item[key];
-                    } else {
-                        element.textContent = item[key];
-                    }
-                }
-            });
-            return row.container;
-        });
-        root.elements.rows.replaceChildren(...nextRows);
+        const rows = data.map(row => create(Row, {
+            columns: internalSchema.map(column => create(Column, {
+                ...column,
+                value: Cell({ column, data: row, name: column.name, value: row[column.name]})
+            }))
+        }));
+
+        setContent(content, rows);
     }
 
-    return {...root, render};
+    return { container: table, render }
 }

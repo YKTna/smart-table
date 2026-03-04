@@ -1,50 +1,148 @@
-import {createComparison, defaultRules} from "../lib/compare.js";
+import {create} from "../lib/utils.js";
+import {Column} from "./table.js";
 
-// @todo: #4.3 — настроить компаратор
 
-export function initFiltering(elements, indexes) {
-    // @todo: #4.1 — заполнить выпадающие списки опциями
-    Object.keys(indexes).forEach((elementName) => {
-        // Получаем текущий элемент селектора
-        const selectElement = elements[elementName];
-        // Очищаем текущие опции
-        selectElement.empty();
+function TextFilter({ name }) {
+    return create('label', {
+        className: 'filter-wrapper'
+    },
+        create('input', {
+            type: 'text',
+            value: '',
+            className: 'input',
+            placeholder: 'Search',
+            name
+        }),
+        create('button', {
+            type: 'submit',
+            name: 'clear',
+            dataset: { name },
+            className: 'icon',
+        })
+    )
+}
 
-        // Создаем и добавляем новые опции
-        Object.values(indexes[elementName]).forEach((name) => {
-            const option = document.createElement('option');
-            option.value = name;
-            option.textContent = name;
-            selectElement.appendChild(option);
-        });
-    });
+function SelectFilter({ name, options }) {
+    return create('label', {
+        className: 'dropdown-select',
+        dataset: { name }
+    },
+        create('select', {
+            name
+        },
+            create('option', {
+                value: '',
+                selected: 'selected'
+            }),
+            ...options.map(option => create('option', {
+                value: option
+            }, option))
+        )
+    )
+}
 
-    return (data, state, action) => {
-        // @todo: #4.2 — обработать очистку поля
-        if (action && action.name === 'filter') {
-            // Обработка фильтрации
-            // Проверяем, есть ли действие "clear" (например, при нажатии кнопки очистки)
-            if (action.dataset && action.dataset.action === 'clear') {
-                // Найдем родительский элемент кнопки
-                const parent = action.target ? action.target.closest('.filter-container') : null;
-                if (parent) {
-                    // Поиск input внутри родителя
-                    const input = parent.querySelector('input[data-field]');
-                    if (input) {
-                        input.value = '';
-                        // Обновим состояние
-                        const field = input.dataset.field;
-                        if (field && state.hasOwnProperty(field)) {
-                            state[field] = '';
-                        }
-                    }
-                }
-            }
-        }
+function RangeFilter({ name }) {
+    return create('div', {
+        className: 'range-inputs'
+    },
+        create('input', {
+            type: 'text',
+            className: 'input',
+            placeholder: 'from',
+            name: `${name}From`
+        }),
+        create('input', {
+            type: 'text',
+            className: 'input',
+            placeholder: 'to',
+            name: `${name}To`,
+        })
+    )
+}
 
-        // @todo: #4.5 — отфильтровать данные используя компаратор
-        // Создаем функцию сравнения с правилами по умолчанию
-        const compare = createComparison(defaultRules);
-        return data.filter(row => compare(row, state));
+export function initFiltering(redraw) {
+    const selectFilters = {};
+    const filterFields = [];
+    let filterContainer;
+
+    const update = (indexes) => {
+        Object.keys(indexes).forEach(indexName => {
+            if (!selectFilters[indexName]) return;
+            selectFilters[indexName].forEach(select => {
+                select.replaceWith(SelectFilter({
+                    name: select.dataset.name,
+                    options: Object.values(indexes[indexName])
+                }))
+            })
+        })
     }
+
+    const apply = (query) => {
+        const filter = {};
+        filterFields.forEach(field => {
+            if (filterContainer.elements[field].value) {
+                filter[`filter[${field}]`] = filterContainer.elements[field].value;
+            }
+        });
+        console.log(filter);
+        return Object.keys(filter).length ? Object.assign({}, query, filter) : query;
+    }
+
+    const plugin = (schema) => {
+        const columns = [];
+        schema.forEach(column => {
+            if (column.filter) switch (column.filter) {
+                case 'text':
+                    columns.push(Column({
+                        name: column.name,
+                        value: TextFilter({ name: column.name })
+                    }));
+                    filterFields.push(column.name);
+                    break;
+                case 'select':
+                    const select = SelectFilter({ name: column.name, options: [] });
+                    if (!selectFilters[column.options]) {
+                        selectFilters[column.options] = [];
+                    }
+                    selectFilters[column.options].push(select);
+                    columns.push(Column({
+                        name: column.name,
+                        value: select
+                    }));
+                    filterFields.push(column.name);
+                    break;
+                case 'range':
+                    columns.push(Column({
+                        name: column.name,
+                        value: RangeFilter({ name: column.name })
+                    }))
+                    filterFields.push(`${column.name}From`, `${column.name}To`);
+                    break;
+            } else {
+                columns.push(Column({
+                    name: column.name,
+                    value: ""
+                }));
+            }
+        });
+        filterContainer = create('form', {
+            name: 'filter',
+            className: 'table-row filter-row',
+        }, ...columns);
+
+        filterContainer.addEventListener('submit', (event) => {
+            event.preventDefault();
+            if (event.submitter.name === 'clear') {
+                const input = event.submitter.parentElement.querySelector('input');
+                input.value = '';
+            }
+            redraw();
+        });
+
+        filterContainer.addEventListener('change', redraw);
+
+        return { type: 'before', element: filterContainer };
+    };
+
+    return { plugin, apply, update }
 }

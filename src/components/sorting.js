@@ -1,35 +1,88 @@
-import {sortCollection, sortMap} from "../lib/sort.js";
+import {sortMap} from "../lib/sort.js";
+import {Column, Row} from "./table.js";
+import {capitalize, create} from "../lib/utils.js";
 
-export function initSorting(columns) {
-    return (data, state, action) => {
-        let field = null;
-        let order = null;
+function Header({ columns }) {
+    return create(Row, {
+        className: 'header-row',
+        columns
+    });
+}
 
-        if (action && action.name === 'sort') {
-            // @todo: #3.1 — запомнить выбранный режим сортировки
-            // Переключаем состояние кнопки по карте
-            action.dataset.value = sortMap[action.dataset.value]; // переключение состояния
-            field = action.dataset.field;
-            order = action.dataset.value;
+function HeaderColumn({ value }) {
+    return create(Column, {
+        role: 'columnheader',
+        value
+    })
+}
 
-            // @todo: #3.2 — сбросить сортировки остальных колонок
-            columns.forEach(column => {
-                if (column.dataset.field !== action.dataset.field) {
-                    column.dataset.value = 'none'; // сброс остальных кнопок
-                }
-            });
-        } else {
-            // @todo: #3.3 — получить выбранный режим сортировки
-            // Проверяем, есть ли активная сортировка среди колонок
-            columns.forEach(column => {
-                if (column.dataset.value !== 'none') {
-                    field = column.dataset.field;
-                    order = column.dataset.value;
-                }
-            });
-        }
+function Sortable({ name, onClick }) {
+    return create('button', {
+        className: 'icon',
+        type: 'button',
+        name: 'sort',
+        dataset: {
+            field: 'date',
+            value: 'none',
+            name: `sortBy${capitalize(name)}`,
+            ariaLabel: `Sort by ${name}`
+        },
+        onClick
+    });
+}
 
-        // @todo: применяем сортировку
-        return sortCollection(data, field, order);
+export function initSorting(onUpdate) {
+    let field = null;
+    let order = null;
+    let buttons = [];
+
+    const onClick = (event) => {
+        event.stopPropagation();
+        const action = event.target;
+
+        action.dataset.value = sortMap[action.dataset.value];
+        field = action.dataset.field;
+        order = action.dataset.value;
+
+        buttons.forEach(btn => {
+            if (btn.dataset.field !== action.dataset.field) {
+                btn.dataset.value = 'none';
+            }
+        });
+
+        void onUpdate();
     }
+
+    const apply = (query) => {
+        const sort = (field && order !== 'none') ? `${field}:${order}` : null;
+
+        return sort ? Object.assign({}, query, { sort }) : query;
+    }
+
+    const plugin = (schema) => {
+        const header = Header({
+            columns: schema.map(column => {
+                let hCell = column.label ?? column.name;
+                if (column.sort) {
+                    const sortButton = Sortable({ name: column.name, onClick });
+                    buttons.push(sortButton);
+
+                    hCell = create('div', {
+                            class: 'sortable'
+                        },
+                        hCell,
+                        sortButton
+                    );
+                }
+
+                return HeaderColumn({
+                    value: hCell
+                });
+            })
+        });
+
+        return { type: 'before', element: header };
+    }
+
+    return { plugin, apply };
 }
