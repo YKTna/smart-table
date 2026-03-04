@@ -1,6 +1,6 @@
 import {create} from "../lib/utils.js";
 
-function searchRow() {
+function SearchRow() {
     return create("form", {class: "search-bar", name: "search"},
         create("label", {class: "search-wrapper"},
             create("i", {class: "icon search-icon", "aria-hidden": "true"}),
@@ -23,7 +23,7 @@ function searchRow() {
 
 
 export function initSearching(redraw) {
-    const searchContainer = searchRow();
+    const searchContainer = SearchRow();
 
     const apply = (query) => {
         if (searchContainer.elements['search'].value) {
