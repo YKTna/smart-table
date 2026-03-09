@@ -22,7 +22,7 @@ function Sortable({ name, onClick }) {
         type: 'button',
         name: 'sort',
         dataset: {
-            field: 'date',
+            field: name,
             value: 'none',
             name: `sortBy${capitalize(name)}`,
             ariaLabel: `Sort by ${name}`

@@ -56,7 +56,14 @@ function RangeFilter({ name }) {
             className: 'input',
             placeholder: 'to',
             name: `${name}To`,
-        })
+        }),
+        create("button", {
+            type: "reset",
+            class: "button reset-wrapper",
+        },
+            "Reset",
+            create("i", {class: "icon reset-icon", "aria-hidden": "true"})
+        )
     )
 }
 
@@ -84,7 +91,6 @@ export function initFiltering(redraw) {
                 filter[`filter[${field}]`] = filterContainer.elements[field].value;
             }
         });
-        console.log(filter);
         return Object.keys(filter).length ? Object.assign({}, query, filter) : query;
     }
 
@@ -118,6 +124,14 @@ export function initFiltering(redraw) {
                     }))
                     filterFields.push(`${column.name}From`, `${column.name}To`);
                     break;
+
+                case 'reset':
+                    columns.push(Column({
+                        name: column.name,
+                        value: ResetButton({ name: column.name })
+                    }))
+                    filterFields.push(`${column.name}From`, `${column.name}To`);
+                break;
             } else {
                 columns.push(Column({
                     name: column.name,
@@ -146,3 +160,13 @@ export function initFiltering(redraw) {
 
     return { plugin, apply, update }
 }
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('resetAllFilters', document)
+    const resetBtn = document.getElementById('resetAllFilters');
+
+    resetBtn.addEventListener('click', (e) => {
+        console.log('dasdasdasd')
+    });
+});

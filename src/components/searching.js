@@ -15,7 +15,7 @@ function SearchRow() {
             type: "reset",
             class: "button reset-wrapper",
         },
-            "Reset all filters",
+            "Reset",
             create("i", {class: "icon reset-icon", "aria-hidden": "true"})
         )
     );
